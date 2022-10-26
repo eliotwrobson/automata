@@ -604,11 +604,14 @@ class DFA(fa.FA):
         Directly computes the minimal DFA recognizing strings containing the
         given substring.
         """
-        prefix = ''
-        #TODO add prefix computation here
-        transitions =
+        prefixes = [substring[:i] for i in range(len(substring))]
 
-        for chr in substring:
+        transitions = {prefix: dict() for prefix in prefixes}
+        transitions[substring] = {
+            symbol: substring for symbol in input_symbols
+        }
+
+        for prefix in prefixes:
             prefix_dict = transitions.setdefault(prefix, dict())
 
             for symbol in input_symbols:
@@ -617,16 +620,9 @@ class DFA(fa.FA):
 
                 # This while loop will always terminate, since the empty string is in the dict
                 while possible_suffix not in transitions:
-                    print(possible_suffix)
                     possible_suffix = possible_suffix[1:]
 
                 prefix_dict[symbol] = possible_suffix
-
-            prefix += chr
-
-        transitions[substring] = {
-            symbol: substring for symbol in input_symbols
-        }
 
         return cls(
             states=set(transitions.keys()),

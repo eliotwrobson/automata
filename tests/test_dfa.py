@@ -1435,17 +1435,15 @@ class TestDFA(test_fa.TestFA):
                 '': {'a': '', 'n': 'n', 'o': '', 'b': ''},
                 'n': {'a': 'na', 'n': 'n', 'o': '', 'b': ''},
                 'na': {'a': '', 'n': 'nan', 'o': '', 'b': ''},
-                'nan': {'a': 'na', 'n': 'n', 'o': '', 'b': ''},
-                'nano': {'a': '', 'n': 'nano', 'o': 'nano', 'b': 'nano'},
+                'nan': {'a': 'na', 'n': 'n', 'o': 'nano', 'b': ''},
+                'nano': {'a': 'nano', 'n': 'nano', 'o': 'nano', 'b': 'nano'},
             },
             initial_state='',
             final_states={'nano'}
         )
 
         minimal_dfa = DFA.contains_substring('nano', {'a', 'n', 'o', 'b'})
-        print(minimal_dfa)
-        assert minimal_dfa.accepts_input('nanoa')
-        assert not equiv_dfa.accepts_input('nanoa')
+
         self.assertEqual(len(minimal_dfa.states), len(equiv_dfa.states))
         self.assertEqual(minimal_dfa, equiv_dfa)
 
