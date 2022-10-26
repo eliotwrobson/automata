@@ -1428,9 +1428,11 @@ class TestDFA(test_fa.TestFA):
     def test_contains_substring(self):
         """Should compute the minimal DFA accepting strings with the given substring"""
 
+        input_symbols = {'a', 'n', 'o', 'b'}
+
         equiv_dfa = DFA(
             states={'', 'n', 'na', 'nan', 'nano'},
-            input_symbols={'a', 'n', 'o', 'b'},
+            input_symbols=input_symbols,
             transitions={
                 '': {'a': '', 'n': 'n', 'o': '', 'b': ''},
                 'n': {'a': 'na', 'n': 'n', 'o': '', 'b': ''},
@@ -1442,10 +1444,13 @@ class TestDFA(test_fa.TestFA):
             final_states={'nano'}
         )
 
-        minimal_dfa = DFA.contains_substring('nano', {'a', 'n', 'o', 'b'})
+        minimal_dfa = DFA.contains_substring('nano', input_symbols)
 
         self.assertEqual(len(minimal_dfa.states), len(equiv_dfa.states))
         self.assertEqual(minimal_dfa, equiv_dfa)
+
+        subset_dfa = DFA.from_finite_language(['nano', 'bananano', 'nananano', 'ooonano'], input_symbols)
+        self.assertTrue(subset_dfa <= minimal_dfa)
 
     def test_minimal_finite_language_large(self):
         """Should compute the minimal DFA accepting the given finite language on large test case"""
