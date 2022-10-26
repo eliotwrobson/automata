@@ -599,6 +599,44 @@ class DFA(fa.FA):
             return True
 
     @classmethod
+    def contains_substring(cls, substring, input_symbols):
+        """
+        Directly computes the minimal DFA recognizing strings containing the
+        given substring.
+        """
+        prefix = ''
+        #TODO add prefix computation here
+        transitions =
+
+        for chr in substring:
+            prefix_dict = transitions.setdefault(prefix, dict())
+
+            for symbol in input_symbols:
+                # Look for next state after reading in the given input symbol
+                possible_suffix = prefix + symbol
+
+                # This while loop will always terminate, since the empty string is in the dict
+                while possible_suffix not in transitions:
+                    print(possible_suffix)
+                    possible_suffix = possible_suffix[1:]
+
+                prefix_dict[symbol] = possible_suffix
+
+            prefix += chr
+
+        transitions[substring] = {
+            symbol: substring for symbol in input_symbols
+        }
+
+        return cls(
+            states=set(transitions.keys()),
+            input_symbols=input_symbols,
+            transitions=transitions,
+            initial_state='',
+            final_states={substring},
+        )
+
+    @classmethod
     def from_finite_language(cls, language, input_symbols):
         """
         Directly computes the minimal DFA corresponding to a finite language.
