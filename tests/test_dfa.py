@@ -1445,11 +1445,12 @@ class TestDFA(test_fa.TestFA):
         )
 
         substring_dfa = DFA.contains_substring('nano', input_symbols)
+        self.assertEqual(len(substring_dfa.states), len(substring_dfa.minify().states))
 
         self.assertEqual(len(substring_dfa.states), len(equiv_dfa.states))
         self.assertEqual(substring_dfa, equiv_dfa)
 
-        subset_dfa = DFA.from_finite_language(['nano', 'bananano', 'nananano', 'ooonano'], input_symbols)
+        subset_dfa = DFA.from_finite_language(['nano', 'bananano', 'nananano', 'naonano'], input_symbols)
         self.assertTrue(subset_dfa < substring_dfa)
 
     def test_contains_subsequence(self):
@@ -1472,6 +1473,7 @@ class TestDFA(test_fa.TestFA):
         )
 
         subsequence_dfa = DFA.contains_subsequence('nano', input_symbols)
+        self.assertEqual(len(subsequence_dfa.states), len(subsequence_dfa.minify().states))
 
         self.assertEqual(len(subsequence_dfa.states), len(equiv_dfa.states))
         self.assertEqual(subsequence_dfa, equiv_dfa)
