@@ -1444,13 +1444,43 @@ class TestDFA(test_fa.TestFA):
             final_states={'nano'}
         )
 
-        minimal_dfa = DFA.contains_substring('nano', input_symbols)
+        substring_dfa = DFA.contains_substring('nano', input_symbols)
 
-        self.assertEqual(len(minimal_dfa.states), len(equiv_dfa.states))
-        self.assertEqual(minimal_dfa, equiv_dfa)
+        self.assertEqual(len(substring_dfa.states), len(equiv_dfa.states))
+        self.assertEqual(substring_dfa, equiv_dfa)
 
         subset_dfa = DFA.from_finite_language(['nano', 'bananano', 'nananano', 'ooonano'], input_symbols)
-        self.assertTrue(subset_dfa <= minimal_dfa)
+        self.assertTrue(subset_dfa < substring_dfa)
+
+    def test_contains_subsequence(self):
+        """Should compute the minimal DFA accepting strings with the given subsequence"""
+
+        input_symbols = {'a', 'n', 'o', 'b'}
+
+        equiv_dfa = DFA(
+            states={'', 'n', 'na', 'nan', 'nano'},
+            input_symbols=input_symbols,
+            transitions={
+                '': {'a': '', 'n': 'n', 'o': '', 'b': ''},
+                'n': {'a': 'na', 'n': 'n', 'o': 'n', 'b': 'n'},
+                'na': {'a': 'na', 'n': 'nan', 'o': 'na', 'b': 'na'},
+                'nan': {'a': 'nan', 'n': 'nan', 'o': 'nano', 'b': 'nan'},
+                'nano': {'a': 'nano', 'n': 'nano', 'o': 'nano', 'b': 'nano'},
+            },
+            initial_state='',
+            final_states={'nano'}
+        )
+
+        subsequence_dfa = DFA.contains_subsequence('nano', input_symbols)
+
+        self.assertEqual(len(subsequence_dfa.states), len(equiv_dfa.states))
+        self.assertEqual(subsequence_dfa, equiv_dfa)
+
+        subset_dfa = DFA.from_finite_language(['naooono', 'bananano', 'onbaonbo', 'ooonano'], input_symbols)
+        self.assertTrue(subset_dfa < subsequence_dfa)
+
+        substring_dfa = DFA.contains_substring('nano', input_symbols)
+        self.assertTrue(substring_dfa < subsequence_dfa)
 
     def test_minimal_finite_language_large(self):
         """Should compute the minimal DFA accepting the given finite language on large test case"""

@@ -599,6 +599,33 @@ class DFA(fa.FA):
             return True
 
     @classmethod
+    def contains_subsequence(cls, subsequence, input_symbols):
+        """
+        Directly computes the minimal DFA recognizing strings containing the
+        given subsequence.
+        """
+        transitions = {
+            i: {
+                symbol: i+1 if symbol == chr else i
+                for symbol in input_symbols
+            }
+            for i, chr in enumerate(subsequence)
+        }
+
+        final_state = len(subsequence)
+        transitions[final_state] = {
+            symbol: final_state for symbol in input_symbols
+        }
+
+        return cls(
+            states=set(transitions.keys()),
+            input_symbols=input_symbols,
+            transitions=transitions,
+            initial_state=0,
+            final_states={final_state},
+        )
+
+    @classmethod
     def contains_substring(cls, substring, input_symbols):
         """
         Directly computes the minimal DFA recognizing strings containing the
