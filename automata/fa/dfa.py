@@ -2,7 +2,7 @@
 """Classes and methods for working with deterministic finite automata."""
 
 from collections import defaultdict, deque
-from itertools import chain, count, product
+from itertools import chain, count, product, combinations
 from random import Random
 
 import networkx as nx
@@ -748,24 +748,28 @@ class DFA(fa.FA):
                     queue.append(next_state)
         '''
 
+        state_pairs = list(map(frozenset, product(self.states, self.states)))
+
         def get_next_states(curr_state):
-            q_a, q_b = curr_state
+            q_a, q_b = tuple(curr_state)
 
             transitions_a = self.transitions[q_a]
             transitions_b = self.transitions[q_b]
 
-            return ((symbol, (transitions_a[symbol], transitions_b[symbol])) for symbol in self.input_symbols)
+            return (
+                (symbol, frozenset((transitions_a[symbol], transitions_b[symbol])))
+                for symbol in self.input_symbols
+            )
 
         forest = nx.DiGraph()
 
-        for start_state in product(self.states, self.states):
+        for start_state in state_pairs:
             queue = deque([start_state])
 
             while queue:
                 curr_state = queue.popleft()
 
-                (q_a, q_b) = curr_state
-                if q_a == q_b:
+                if len(curr_state) == 1:
                     break
 
                 forest.add_node(start_state)
@@ -777,8 +781,18 @@ class DFA(fa.FA):
                     forest.add_edge(curr_state, next_state, symbol=symbol)
 
 
-        print(nx.find_cycle(forest))
+        #print(nx.find_cycle(forest))
+        print('here')
+        for pair in state_pairs:
+            if pair in forest:
+                other_pairs = nx.descendants(forest, pair)
+                found = any(
+                    len(a) == 1 for a in other_pairs
+                )
 
+                if not found:
+                    print(other_pairs)
+                    print(pair, found)
 
         '''
         return nx.DiGraph([
@@ -789,8 +803,10 @@ class DFA(fa.FA):
         '''
 
     def is_synchronizing(self):
-        G = self._get_synchronizing_word_forest()
+        self._get_synchronizing_word_forest()
 
+        #dist_dict = nx.floyd_warshall_predecessor_and_distance(G)
+        #print(dist_dict)
 
     @classmethod
     def from_prefix(cls, input_symbols, prefix, *, contains=True):
