@@ -732,22 +732,28 @@ class DFA(fa.FA):
         except nx.exception.NetworkXUnfeasible:
             return None
 
-    def _get_synchronizing_word_forest(self):
-        state_pairs = list(map(frozenset, product(self.states, self.states)))
-
+    def _get_synchronizing_word_graph(self):
         dfa_graph = nx.DiGraph()
 
-        return nx.DiGraph([
-            ((q_a, q_b), (self.transitions[q_a][symbol], self.transitions[q_b][symbol]))
-            for (q_a, q_b) in product(self.states, self.states)
-            for symbol in self.input_symbols
-        ])
+        for symbol in self.input_symbols:
+            dfa_graph.add_edges_from([
+                (frozenset((q_a, q_b)),
+                 frozenset((self.transitions[q_a][symbol], self.transitions[q_b][symbol])))
+                for (q_a, q_b) in product(self.states, self.states)
+            ], symbol=symbol)
 
-    def is_synchronizing(self):
-        self._get_synchronizing_word_forest()
+        return dfa_graph
 
-        #dist_dict = nx.floyd_warshall_predecessor_and_distance(G)
-        #print(dist_dict)
+    def get_synchronizing_string(self):
+        graph = self._get_synchronizing_word_graph()
+        #print('here')
+        #print(graph.nodes)
+
+        dist_dict = dict(nx.all_pairs_shortest_path(graph))
+
+        sequence = []
+
+        print(dist_dict[frozenset([0,1])][frozenset([5])])
 
     @classmethod
     def from_prefix(cls, input_symbols, prefix, *, contains=True):
