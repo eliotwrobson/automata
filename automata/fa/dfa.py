@@ -733,74 +733,15 @@ class DFA(fa.FA):
             return None
 
     def _get_synchronizing_word_forest(self):
-        '''
-        queue = deque()
-
-        queue.append(self.initial_state)
-        visited_set.add(self.initial_state)
-
-        while queue:
-            state = queue.popleft()
-
-            for next_state in self.transitions[state].values():
-                if next_state not in visited_set:
-                    visited_set.add(next_state)
-                    queue.append(next_state)
-        '''
-
         state_pairs = list(map(frozenset, product(self.states, self.states)))
 
-        def get_next_states(curr_state):
-            q_a, q_b = tuple(curr_state)
+        dfa_graph = nx.DiGraph()
 
-            transitions_a = self.transitions[q_a]
-            transitions_b = self.transitions[q_b]
-
-            return (
-                (symbol, frozenset((transitions_a[symbol], transitions_b[symbol])))
-                for symbol in self.input_symbols
-            )
-
-        forest = nx.DiGraph()
-
-        for start_state in state_pairs:
-            queue = deque([start_state])
-
-            while queue:
-                curr_state = queue.popleft()
-
-                if len(curr_state) == 1:
-                    break
-
-                forest.add_node(start_state)
-
-                for symbol, next_state in get_next_states(curr_state):
-                    if not forest.has_node(next_state):
-                        queue.append(next_state)
-
-                    forest.add_edge(curr_state, next_state, symbol=symbol)
-
-
-        #print(nx.find_cycle(forest))
-        print('here')
-        for pair in state_pairs:
-            if pair in forest:
-                other_pairs = nx.descendants(forest, pair)
-                found = any(
-                    len(a) == 1 for a in other_pairs
-                )
-
-                if not found:
-                    print(other_pairs)
-                    print(pair, found)
-
-        '''
         return nx.DiGraph([
             ((q_a, q_b), (self.transitions[q_a][symbol], self.transitions[q_b][symbol]))
             for (q_a, q_b) in product(self.states, self.states)
             for symbol in self.input_symbols
         ])
-        '''
 
     def is_synchronizing(self):
         self._get_synchronizing_word_forest()
