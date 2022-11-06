@@ -2,7 +2,7 @@
 """Classes and methods for working with deterministic finite automata."""
 
 from collections import defaultdict, deque
-from itertools import chain, count
+from itertools import chain, count, product
 from random import Random
 
 import networkx as nx
@@ -731,6 +731,66 @@ class DFA(fa.FA):
             return nx.dag_longest_path_length(subgraph)
         except nx.exception.NetworkXUnfeasible:
             return None
+
+    def _get_synchronizing_word_forest(self):
+        '''
+        queue = deque()
+
+        queue.append(self.initial_state)
+        visited_set.add(self.initial_state)
+
+        while queue:
+            state = queue.popleft()
+
+            for next_state in self.transitions[state].values():
+                if next_state not in visited_set:
+                    visited_set.add(next_state)
+                    queue.append(next_state)
+        '''
+
+        def get_next_states(curr_state):
+            q_a, q_b = curr_state
+
+            transitions_a = self.transitions[q_a]
+            transitions_b = self.transitions[q_b]
+
+            return ((symbol, (transitions_a[symbol], transitions_b[symbol])) for symbol in self.input_symbols)
+
+        forest = nx.DiGraph()
+
+        for start_state in product(self.states, self.states):
+            queue = deque([start_state])
+
+            while queue:
+                curr_state = queue.popleft()
+
+                (q_a, q_b) = curr_state
+                if q_a == q_b:
+                    break
+
+                forest.add_node(start_state)
+
+                for symbol, next_state in get_next_states(curr_state):
+                    if not forest.has_node(next_state):
+                        queue.append(next_state)
+
+                    forest.add_edge(curr_state, next_state, symbol=symbol)
+
+
+        print(nx.find_cycle(forest))
+
+
+        '''
+        return nx.DiGraph([
+            ((q_a, q_b), (self.transitions[q_a][symbol], self.transitions[q_b][symbol]))
+            for (q_a, q_b) in product(self.states, self.states)
+            for symbol in self.input_symbols
+        ])
+        '''
+
+    def is_synchronizing(self):
+        G = self._get_synchronizing_word_forest()
+
 
     @classmethod
     def from_prefix(cls, input_symbols, prefix, *, contains=True):
