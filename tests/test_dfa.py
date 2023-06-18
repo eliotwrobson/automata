@@ -1865,6 +1865,7 @@ class TestDFA(test_fa.TestFA):
 
         for i in range(10):
             self.assertIn(dfa.random_word(100), dfa)
+            print(dfa._count_cache[dfa.initial_state])
 
     def test_predecessor(self) -> None:
         binary = {"0", "1"}

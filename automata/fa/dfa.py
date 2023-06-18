@@ -94,7 +94,7 @@ class DFA(fa.FA):
         Can be called if too much memory is being used.
         """
         object.__setattr__(self, "_word_cache", [])
-        object.__setattr__(self, "_count_cache", [])
+        object.__setattr__(self, "_count_cache", {})
 
     def __eq__(self, other: Any) -> bool:
         """
@@ -773,17 +773,17 @@ class DFA(fa.FA):
     def random_word(self, k: int, *, seed: Optional[int] = None) -> str:
         self._populate_count_cache_up_to_len(k)
         state = self.initial_state
-        if self._count_cache[k][state] == 0:
+        if len(self._count_cache[state]) < k:
             raise ValueError(f"Language has no words of length {k}")
 
         result = []
         rng = Random(seed)
         for remaining in range(k, 0, -1):
-            total = self._count_cache[remaining][state]
+            total = self._count_cache[state][remaining]
             choice = rng.randint(0, total - 1)
             transition = self.transitions[state]
             for symbol, next_state in transition.items():  # pragma: no branch
-                next_state_count = self._count_cache[remaining - 1][next_state]
+                next_state_count = self._count_cache[next_state][remaining - 1]
                 if choice < next_state_count:
                     result.append(symbol)
                     state = next_state
@@ -950,29 +950,45 @@ class DFA(fa.FA):
         Counts words of length `k` accepted by the DFA
         """
         self._populate_count_cache_up_to_len(k)
-        return self._count_cache[k][self.initial_state]
+        return self._count_cache[self.initial_state][k]
 
     def _populate_count_cache_up_to_len(self, k: int) -> None:
         """
         Populate count cache up to length k
         """
-        while len(self._count_cache) <= k:
-            i = len(self._count_cache)
-            self._count_cache.append(defaultdict(int))
-            level = self._count_cache[i]
-            if i == 0:
-                level.update({state: 1 for state in self.final_states})
-            else:
-                prev_level = self._count_cache[i - 1]
-                level.update(
-                    {
-                        state: sum(
-                            prev_level[suffix_state]
-                            for suffix_state in self.transitions[state].values()
-                        )
-                        for state in self.states
-                    }
+        import array
+
+        if not self._count_cache:
+            self._count_cache.update(
+                {
+                    state: array.array("Q", [1] if state in self.final_states else [0])
+                    for state in self.states
+                }
+            )
+
+        while len(self._count_cache[self.initial_state]) <= k:
+            i = len(self._count_cache[self.initial_state])
+            print(i)
+            # self._count_cache.append(defaultdict(int))
+            # level = self._count_cache[i]
+
+            # level.update({state: 1 for state in self.final_states})
+
+            for state in self.states:
+                self._count_cache[state].append(
+                    sum(
+                        self._count_cache[suffix_state][i - 1]
+                        for suffix_state in self.transitions[state].values()
+                    )
                 )
+
+                # level.update(
+                #    {
+                #        state:
+                #        )
+                #        for state in self.states
+                #    }
+                # )
 
     def words_of_length(self, k: int) -> Generator[str, None, None]:
         """
