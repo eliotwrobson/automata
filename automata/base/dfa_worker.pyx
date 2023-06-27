@@ -72,9 +72,10 @@ cdef class PartitionRefinement:
 
         cdef set A
         cdef set AintS
+        cdef long long A_id
         cdef long long AintS_id
-        for Aid, AintS in hit.items():
-            A = self._sets[Aid]
+        for A_id, AintS in hit.items():
+            A = self._sets[A_id]
 
             # Only need to check lengths, we already know AintS is a subset of A
             # by construction
@@ -86,7 +87,7 @@ cdef class PartitionRefinement:
                 A -= AintS
 
                 new_sets.append(AintS_id)
-                old_sets.append(Aid)
+                old_sets.append(A_id)
 
         return new_sets, old_sets
 
@@ -94,14 +95,13 @@ cdef class PartitionRefinement:
 def _minify_worker(
     reachable_states_input,
     input_symbols_input,
-    transitions_input,
+    transitions,
     reachable_final_states_input,
 ):
 
     # Redeclare everything statically because of the more abstract interface
     cdef frozenset reachable_states = frozenset(reachable_states_input)
     cdef frozenset input_symbols = frozenset(input_symbols_input)
-    cdef dict transitions = dict(transitions_input)
     cdef set reachable_final_states = set(reachable_final_states_input)
 
     # First, assemble backmap and equivalence class data structure
@@ -118,10 +118,16 @@ def _minify_worker(
         for symbol in input_symbols
     }
 
+    cdef str symbol
+    cdef dict symbol_dict
+    cdef list symbol_list
+
     for start_state, path in transitions.items():
         if start_state in reachable_states:
             for symbol, end_state in path.items():
-                transition_back_map[symbol][end_state].append(start_state)
+                symbol_dict = transition_back_map[symbol]
+                symbol_list = symbol_dict[end_state]
+                symbol_list.append(start_state)
 
     cdef tuple origin_dicts = tuple(transition_back_map.values())
     cdef set processing = {final_states_id}
