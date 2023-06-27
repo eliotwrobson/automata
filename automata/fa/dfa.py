@@ -31,7 +31,8 @@ from typing_extensions import Self
 import automata.base.exceptions as exceptions
 import automata.fa.fa as fa
 import automata.fa.nfa as nfa
-from automata.base.utils import PartitionRefinement, get_renaming_function
+from automata.base.dfa_worker import _minify_worker
+from automata.base.utils import get_renaming_function
 
 DFAStateT = fa.FAStateT
 
@@ -375,57 +376,13 @@ class DFA(fa.FA):
         """Minify helper function. DFA data passed in must have no unreachable
         states."""
 
-        # First, assemble backmap and equivalence class data structure
-        eq_classes = PartitionRefinement(reachable_states)
-        refinement = eq_classes.refine(reachable_final_states)
-
-        final_states_id = (
-            refinement[0][0] if refinement else next(iter(eq_classes.get_set_ids()))
-        )
-
-        transition_back_map: Dict[str, Dict[DFAStateT, List[DFAStateT]]] = {
-            symbol: {end_state: list() for end_state in reachable_states}
-            for symbol in input_symbols
-        }
-
-        for start_state, path in transitions.items():
-            if start_state in reachable_states:
-                for symbol, end_state in path.items():
-                    transition_back_map[symbol][end_state].append(start_state)
-
-        origin_dicts = tuple(transition_back_map.values())
-        processing = {final_states_id}
-
-        while processing:
-            # Save a copy of the set, since it could get modified while executing
-            active_state = tuple(eq_classes.get_set_by_id(processing.pop()))
-            for origin_dict in origin_dicts:
-                states_that_move_into_active_state = chain.from_iterable(
-                    origin_dict[end_state] for end_state in active_state
-                )
-
-                # Refine set partition by states moving into current active one
-                new_eq_class_pairs = eq_classes.refine(
-                    states_that_move_into_active_state
-                )
-
-                for YintX_id, YdiffX_id in new_eq_class_pairs:
-                    # Only adding one id to processing, since the other is already there
-                    if YdiffX_id in processing:
-                        processing.add(YintX_id)
-                    else:
-                        if len(eq_classes.get_set_by_id(YintX_id)) <= len(
-                            eq_classes.get_set_by_id(YdiffX_id)
-                        ):
-                            processing.add(YintX_id)
-                        else:
-                            processing.add(YdiffX_id)
+        eq_class_pairs = _minify_worker(reachable_states, input_symbols, transitions, reachable_final_states)
 
         # now eq_classes are good to go, make them a list for ordering
         eq_class_name_pairs: List[Tuple[DFAStateT, Set[DFAStateT]]] = (
-            [(frozenset(eq), eq) for eq in eq_classes.get_sets()]
+            [(frozenset(eq), eq) for eq in eq_class_pairs]
             if retain_names
-            else list(enumerate(eq_classes.get_sets()))
+            else list(enumerate(eq_class_pairs))
         )
 
         # need a backmap to prevent constant calls to index

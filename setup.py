@@ -1,4 +1,7 @@
+import Cython.Compiler.Options
+from Cython.Build import cythonize
 from setuptools import setup
 
-if __name__ == "__main__":
-    setup()
+Cython.Compiler.Options.annotate = True
+
+setup(ext_modules = cythonize('automata/base/dfa_worker.pyx', annotate=True))
