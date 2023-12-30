@@ -1,6 +1,6 @@
 # Automata
 
-*Copyright 2016-2023 Caleb Evans*  
+*Copyright 2016-2023 Caleb Evans*
 *Released under the MIT license*
 
 [![PyPI version](https://badge.fury.io/py/automata-lib.svg)](https://badge.fury.io/py/automata-lib)
@@ -15,6 +15,7 @@ pushdown automata, and Turing machines. The algorithms have been optimized and a
 processing large inputs. Visualization logic has also been implemented. This package is suitable for
 both researchers wishing to manipulate automata and for instructors teaching courses on theoretical
 computer science.
+
 
 The library requires Python 3.8 or newer.
 
