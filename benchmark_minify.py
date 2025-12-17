@@ -425,6 +425,7 @@ def benchmark_reducible_dfas(
         print(f"Trial {trial + 1}/{num_trials}:")
 
         # Generate highly reducible DFA
+        print(f"  Generating DFA with {total_states:,} states...", end=" ", flush=True)
         dfa = generate_highly_reducible_dfa(
             num_equivalent_groups, states_per_group, alphabet_size
         )
@@ -432,8 +433,9 @@ def benchmark_reducible_dfas(
         # Count transitions
         num_transitions = sum(len(trans) for trans in dfa.transitions.values())
 
+        print("done")
         print(
-            f"  Original DFA: {len(dfa.states)} states, {num_transitions} transitions"
+            f"  Original DFA: {len(dfa.states):,} states, {num_transitions:,} transitions"
         )
 
         # Get reachable states
@@ -456,6 +458,7 @@ def benchmark_reducible_dfas(
         reachable_final_states = dfa.final_states & reachable_states
 
         # Benchmark old algorithm
+        print("  Running old (Hopcroft) algorithm...", end=" ", flush=True)
         start_time = time.perf_counter()
         old_result = old_minify_hopcroft(
             DFA,
@@ -478,10 +481,11 @@ def benchmark_reducible_dfas(
             else 1
         )
         print(
-            f"  Old (Hopcroft): {old_time * 1000:.2f}ms -> {len(old_result.states)} states ({reduction:.1f}× reduction), {old_num_transitions} transitions"
+            f"done in {old_time:.2f}s -> {len(old_result.states):,} states ({reduction:.1f}× reduction), {old_num_transitions:,} transitions"
         )
 
         # Benchmark new algorithm
+        print("  Running new (Valmari) algorithm...", end=" ", flush=True)
         start_time = time.perf_counter()
         new_result = DFA._minify(
             reachable_states=reachable_states,
@@ -498,7 +502,7 @@ def benchmark_reducible_dfas(
             len(trans) for trans in new_result.transitions.values()
         )
         print(
-            f"  New (Valmari): {new_time * 1000:.2f}ms -> {len(new_result.states)} states, {new_num_transitions} transitions"
+            f"done in {new_time:.2f}s -> {len(new_result.states):,} states, {new_num_transitions:,} transitions"
         )
 
         reduction_ratios.append(reduction)
@@ -528,11 +532,20 @@ def benchmark_reducible_dfas(
     print(f"{'=' * 80}")
     print(f"Summary ({num_trials} trials):")
     print(
-        f"  Average reduction: {avg_reduction:.1f}× ({total_states} → ~{total_states / avg_reduction:.0f} states)"
+        f"  Average reduction: {avg_reduction:.1f}× ({total_states:,} → ~{total_states / avg_reduction:.0f} states)"
     )
-    print(f"  Old (Hopcroft) average: {avg_old * 1000:.2f}ms")
-    print(f"  New (Valmari) average: {avg_new * 1000:.2f}ms")
+    # Use seconds or milliseconds depending on magnitude
+    if avg_old < 1.0:
+        print(f"  Old (Hopcroft) average: {avg_old * 1000:.2f}ms")
+        print(f"  New (Valmari) average: {avg_new * 1000:.2f}ms")
+    else:
+        print(f"  Old (Hopcroft) average: {avg_old:.2f}s")
+        print(f"  New (Valmari) average: {avg_new:.2f}s")
     print(f"  Average speedup: {avg_speedup:.2f}x")
+    if avg_speedup > 1.0:
+        print(f"  ✅ New algorithm is FASTER by {(avg_speedup - 1) * 100:.1f}%")
+    else:
+        print(f"  ⚠️  New algorithm is slower by {(1 - avg_speedup) * 100:.1f}%")
     print(f"{'=' * 80}\n")
 
 
@@ -543,40 +556,55 @@ if __name__ == "__main__":
     print("Old: Hopcroft algorithm (commit d08ccbf)")
     print("New: Valmari algorithm (current implementation)\n")
 
-    print("\n" + "=" * 80)
-    print("PART 1: Random Partial DFAs (low reduction potential)")
-    print("=" * 80)
+    # Uncomment to run smaller tests
+    # print("\n" + "=" * 80)
+    # print("PART 1: Random Partial DFAs (low reduction potential)")
+    # print("=" * 80)
 
-    # Test with random partial DFAs
-    test_cases = [
-        (100, 10),  # 100 states, 10 symbols
-        (500, 20),  # 500 states, 20 symbols
-        (1000, 50),  # 1000 states, 50 symbols
-        (2000, 100),  # 2000 states, 100 symbols (large alphabet)
+    # # Test with random partial DFAs
+    # test_cases = [
+    #     (100, 10),  # 100 states, 10 symbols
+    #     (500, 20),  # 500 states, 20 symbols
+    #     (1000, 50),  # 1000 states, 50 symbols
+    #     (2000, 100),  # 2000 states, 100 symbols (large alphabet)
+    # ]
+
+    # for num_states, alphabet_size in test_cases:
+    #     benchmark_minify_algorithms(num_states, alphabet_size, num_trials=3)
+
+    # print("\n" + "=" * 80)
+    # print("PART 2: Highly Reducible DFAs (high reduction potential)")
+    # print("=" * 80)
+
+    # # Test with highly reducible DFAs - where Valmari's algorithm should shine
+    # reducible_test_cases = [
+    #     (20, 10, 10),  # 200 states (20 groups × 10 states), 10 symbols
+    #     (50, 20, 20),  # 1000 states (50 groups × 20 states), 20 symbols
+    #     (100, 50, 50),  # 5000 states (100 groups × 50 states), 50 symbols
+    #     (200, 100, 100),  # 20000 states (200 groups × 100 states), 100 symbols
+    # ]
+
+    # for num_groups, states_per_group, alphabet_size in reducible_test_cases:
+    #     benchmark_reducible_dfas(
+    #         num_groups, states_per_group, alphabet_size, num_trials=3
+    #     )
+
+    print("\n" + "=" * 80)
+    print("PART 3: VERY LARGE Highly Reducible DFAs (100K - 500K states)")
+    print("=" * 80)
+    print("These tests will take several minutes each...")
+
+    # Very large DFAs - single trial each due to time
+    # Note: using fewer states per group for faster generation
+    very_large_test_cases = [
+        (500, 200, 150),  # 100K states (500 groups × 200 states), 150 symbols
+        (1000, 200, 200),  # 200K states (1000 groups × 200 states), 200 symbols
+        (2000, 250, 250),  # 500K states (2000 groups × 250 states), 250 symbols
     ]
 
-    for num_states, alphabet_size in test_cases:
-        benchmark_minify_algorithms(num_states, alphabet_size, num_trials=3)
-
-    print("\n" + "=" * 80)
-    print("PART 2: Highly Reducible DFAs (high reduction potential)")
-    print("=" * 80)
-
-    # Test with highly reducible DFAs - where Valmari's algorithm should shine
-    reducible_test_cases = [
-        (20, 10, 10),  # 200 states (20 groups × 10 states), 10 symbols
-        (50, 20, 20),  # 1000 states (50 groups × 20 states), 20 symbols
-        (100, 50, 50),  # 5000 states (100 groups × 50 states), 50 symbols
-        (
-            200,
-            100,
-            100,
-        ),  # 20000 states (200 groups × 100 states), 100 symbols - large alphabet
-    ]
-
-    for num_groups, states_per_group, alphabet_size in reducible_test_cases:
+    for num_groups, states_per_group, alphabet_size in very_large_test_cases:
         benchmark_reducible_dfas(
-            num_groups, states_per_group, alphabet_size, num_trials=3
+            num_groups, states_per_group, alphabet_size, num_trials=1
         )
 
     print("\nBenchmark complete!")
