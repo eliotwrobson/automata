@@ -702,16 +702,20 @@ class DFA(fa.FA):
                     reverse_transitions.get((symbol, target_state), [])
                 )
 
-            # Refine all blocks based on which states transition to block_id via symbol
-            blocks_to_check = list(blocks.get_set_ids())
-            for check_block_id in blocks_to_check:
+            # Group states by their current block
+            blocks_to_refine: Dict[int, Set[InputPathT]] = {}
+            for state in states_transitioning_to_block:
+                state_block_id = blocks._partition[state]
+                if state_block_id not in blocks_to_refine:
+                    blocks_to_refine[state_block_id] = set()
+                blocks_to_refine[state_block_id].add(state)
+
+            # Refine each affected block
+            for check_block_id, intersect in blocks_to_refine.items():
                 check_block = blocks.get_set_by_id(check_block_id)
 
-                # Find intersection: states in check_block that transition to block_id
-                intersect = check_block & states_transitioning_to_block
-
-                if not intersect or len(intersect) == len(check_block):
-                    # No split needed
+                if len(intersect) == len(check_block):
+                    # No split needed - all states in block transition to block_id
                     continue
 
                 # This block needs to be split
