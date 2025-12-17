@@ -627,9 +627,9 @@ class DFA(fa.FA):
         reachable_states = set(reachable_states)
 
         # Build reverse transition map: for each (symbol, target), list of sources
-        reverse_transitions: Dict[
-            Tuple[str, DFAStateT], List[DFAStateT]
-        ] = defaultdict(list)
+        reverse_transitions: Dict[Tuple[str, DFAStateT], List[DFAStateT]] = defaultdict(
+            list
+        )
         trap_state = None
 
         # Iterate over a copy since we might add trap state
@@ -650,22 +650,20 @@ class DFA(fa.FA):
                         reachable_states.add(trap_state)
                         # Trap state loops to itself on all symbols
                         for trap_symbol in input_symbols:
-                            reverse_transitions[
-                                (trap_symbol, trap_state)
-                            ].append(trap_state)
+                            reverse_transitions[(trap_symbol, trap_state)].append(
+                                trap_state
+                            )
 
                     reverse_transitions[(symbol, trap_state)].append(start_state)
 
         # Initialize block partition: separate final and non-final states
         blocks = PartitionRefinement(reachable_states)
         refinement_result = (
-            blocks.refine(reachable_final_states)
-            if reachable_final_states
-            else []
+            blocks.refine(reachable_final_states) if reachable_final_states else []
         )
 
-        # Build worklist: start with the smaller of (final_states, non_final_states)
-        worklist: List[Tuple[int, str]] = []
+        # Build worklist: Dict[symbol -> Set[block_ids]] for O(1) operations
+        worklist: Dict[str, Set[int]] = {symbol: set() for symbol in input_symbols}
 
         if refinement_result:
             # Block was split into final and non-final
@@ -679,18 +677,20 @@ class DFA(fa.FA):
                 else non_final_block_id
             )
 
-            # Add (block, symbol) pairs to worklist for all symbols
-            worklist.extend((smaller_block, symbol) for symbol in input_symbols)
+            # Add smaller block to worklist for all symbols
+            for symbol in input_symbols:
+                worklist[symbol].add(smaller_block)
         else:
-            # No split occurred, add all symbols with the single block
+            # No split occurred, add single block for all symbols
             single_block_id = next(iter(blocks.get_set_ids()))
-            worklist.extend(
-                (single_block_id, symbol) for symbol in input_symbols
-            )
+            for symbol in input_symbols:
+                worklist[symbol].add(single_block_id)
 
         # Main refinement loop
-        while worklist:
-            block_id, symbol = worklist.pop()
+        while any(worklist.values()):
+            # Find a symbol with pending blocks
+            symbol = next(sym for sym, blocks_set in worklist.items() if blocks_set)
+            block_id = worklist[symbol].pop()
             block_states = blocks.get_set_by_id(block_id)
 
             # Find all states that transition to this block via this symbol
@@ -723,24 +723,22 @@ class DFA(fa.FA):
                 # Update worklist: for each symbol, add the smaller of the two
                 # new blocks
                 for sym in input_symbols:
-                    # Check if (check_block_id, sym) is in worklist
-                    if (check_block_id, sym) in worklist:
+                    # Check if check_block_id is in worklist for this symbol
+                    if check_block_id in worklist[sym]:
                         # Replace with both new blocks
-                        worklist.remove((check_block_id, sym))
-                        worklist.append((new_block_id, sym))
-                        worklist.append((remaining_block_id, sym))
+                        worklist[sym].discard(check_block_id)
+                        worklist[sym].add(new_block_id)
+                        worklist[sym].add(remaining_block_id)
                     else:
                         # Add the smaller block
                         new_size = len(blocks.get_set_by_id(new_block_id))
-                        remaining_size = len(
-                            blocks.get_set_by_id(remaining_block_id)
-                        )
+                        remaining_size = len(blocks.get_set_by_id(remaining_block_id))
                         smaller = (
                             new_block_id
                             if new_size <= remaining_size
                             else remaining_block_id
                         )
-                        worklist.append((smaller, sym))
+                        worklist[sym].add(smaller)
 
         # Build minimized DFA from final blocks
         eq_class_name_pairs: List[Tuple[DFAStateT, Set[DFAStateT]]] = (
