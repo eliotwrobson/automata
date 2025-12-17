@@ -627,13 +627,16 @@ class DFA(fa.FA):
         reachable_states = set(reachable_states)
 
         # Build reverse transition map: for each (symbol, target), list of sources
-        reverse_transitions: Dict[Tuple[str, DFAStateT], List[DFAStateT]] = defaultdict(
-            list
-        )
-        trap_state = None
+        # Use None as sentinel for implicit trap state (undefined transitions)
+        reverse_transitions: Dict[
+            Tuple[str, Optional[DFAStateT]], List[DFAStateT]
+        ] = defaultdict(list)
 
-        # Iterate over a copy since we might add trap state
-        for start_state in list(reachable_states):
+        # Track if we have any undefined transitions (partial DFA)
+        has_trap_state = False
+
+        # Build reverse transitions for reachable states
+        for start_state in reachable_states:
             if start_state not in transitions:
                 continue
             path = transitions[start_state]
@@ -642,22 +645,19 @@ class DFA(fa.FA):
                 if end_state in reachable_states:
                     reverse_transitions[(symbol, end_state)].append(start_state)
                 else:
-                    # Handle partial DFA - add trap state if needed
-                    if trap_state is None:
-                        trap_state = next(
-                            x for x in count(-1, -1) if x not in reachable_states
-                        )
-                        reachable_states.add(trap_state)
-                        # Trap state loops to itself on all symbols
-                        for trap_symbol in input_symbols:
-                            reverse_transitions[(trap_symbol, trap_state)].append(
-                                trap_state
-                            )
-
-                    reverse_transitions[(symbol, trap_state)].append(start_state)
+                    # Undefined transition - goes to implicit trap state (None)
+                    reverse_transitions[(symbol, None)].append(start_state)
+                    has_trap_state = True
+        
+        # Add self-loops for trap state (None loops to itself on all symbols)
+        if has_trap_state:
+            for symbol in input_symbols:
+                reverse_transitions[(symbol, None)].append(None)
 
         # Initialize block partition: separate final and non-final states
-        blocks = PartitionRefinement(reachable_states)
+        # Include trap state (None) if there are undefined transitions
+        states_with_trap = reachable_states | {None} if has_trap_state else reachable_states
+        blocks = PartitionRefinement(states_with_trap)
         refinement_result = (
             blocks.refine(reachable_final_states) if reachable_final_states else []
         )
@@ -667,7 +667,7 @@ class DFA(fa.FA):
 
         if refinement_result:
             # Block was split into final and non-final
-            final_block_id, non_final_block_id = refinement_result[0]
+            (final_block_id, non_final_block_id), *_ = refinement_result
             final_block_size = len(blocks.get_set_by_id(final_block_id))
             non_final_block_size = len(blocks.get_set_by_id(non_final_block_id))
 
@@ -718,7 +718,7 @@ class DFA(fa.FA):
                 if not new_block_pairs:
                     continue
 
-                new_block_id, remaining_block_id = new_block_pairs[0]
+                (new_block_id, remaining_block_id), *_ = new_block_pairs
 
                 # Update worklist: for each symbol, add the smaller of the two
                 # new blocks
@@ -748,15 +748,16 @@ class DFA(fa.FA):
         )
 
         # Create mapping from old states to new states (block representatives)
+        # Filter out the trap state (None) and any real states merged with it
         back_map = {
             state: name
             for name, eq in eq_class_name_pairs
+            if None not in eq  # Skip entire equivalence class if it contains trap state
             for state in eq
-            if trap_state not in eq
         }
 
-        # If only one equivalence class with the trap state, return empty language
-        if not back_map:
+        # If initial state was merged with trap state, DFA accepts empty language
+        if initial_state not in back_map:
             return cls.empty_language(input_symbols)
 
         new_input_symbols = input_symbols
@@ -766,18 +767,23 @@ class DFA(fa.FA):
         new_transitions = {}
 
         for name, eq in eq_class_name_pairs:
-            # For trap state, can just leave out
-            if trap_state in eq:
+            # Skip the trap state block if it exists
+            if None in eq:
                 continue
 
             eq_class_rep = next(iter(eq))
 
-            inner_transition_dict_old = transitions[eq_class_rep]
-            new_transitions[name] = {
-                letter: back_map[inner_transition_dict_old[letter]]
-                for letter in inner_transition_dict_old.keys()
-                if inner_transition_dict_old[letter] in back_map.keys()
-            }
+            # Get transitions for this equivalence class representative
+            if eq_class_rep in transitions:
+                inner_transition_dict_old = transitions[eq_class_rep]
+                new_transitions[name] = {
+                    letter: back_map[inner_transition_dict_old[letter]]
+                    for letter in inner_transition_dict_old.keys()
+                    if inner_transition_dict_old[letter] in back_map.keys()
+                }
+            else:
+                # No transitions for this state (empty dict for partial DFA)
+                new_transitions[name] = {}
 
         allow_partial = any(
             len(lookup) != len(input_symbols) for lookup in new_transitions.values()
