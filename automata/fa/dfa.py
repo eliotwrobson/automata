@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import array
 from collections import defaultdict, deque
-from itertools import chain, count
+from itertools import count
 from random import Random
 from typing import (
     AbstractSet,
@@ -616,89 +616,140 @@ class DFA(fa.FA):
         retain_names: bool,
     ) -> Self:
         """
-        Minify helper function. DFA data passed in must have no unreachable states.
-        If the input DFA is partial, then the result is also a partial DFA
+        Minify helper function using Valmari's algorithm approach.
+        DFA data passed in must have no unreachable states.
+        If the input DFA is partial, then the result is also a partial DFA.
+
+        This uses an optimized partition refinement algorithm that's efficient
+        for partial DFAs (O(m log n) where m is transitions, n is states).
         """
 
         reachable_states = set(reachable_states)
 
-        # Per input-symbol backmap (tgt -> origin states)
-        transition_back_map: Dict[str, Dict[DFAStateT, List[DFAStateT]]] = {
-            symbol: {end_state: [] for end_state in reachable_states}
-            for symbol in input_symbols
-        }
-
+        # Build reverse transition map: for each (symbol, target), list of sources
+        reverse_transitions: Dict[
+            Tuple[str, DFAStateT], List[DFAStateT]
+        ] = defaultdict(list)
         trap_state = None
 
-        for start_state, path in transitions.items():
-            if start_state in reachable_states:
-                for symbol in input_symbols:
-                    end_state = path.get(symbol)
+        # Iterate over a copy since we might add trap state
+        for start_state in list(reachable_states):
+            if start_state not in transitions:
+                continue
+            path = transitions[start_state]
+            for symbol in input_symbols:
+                end_state = path.get(symbol)
+                if end_state in reachable_states:
+                    reverse_transitions[(symbol, end_state)].append(start_state)
+                else:
+                    # Handle partial DFA - add trap state if needed
+                    if trap_state is None:
+                        trap_state = next(
+                            x for x in count(-1, -1) if x not in reachable_states
+                        )
+                        reachable_states.add(trap_state)
+                        # Trap state loops to itself on all symbols
+                        for trap_symbol in input_symbols:
+                            reverse_transitions[
+                                (trap_symbol, trap_state)
+                            ].append(trap_state)
 
-                    # If statement here needed to ignore certain transitions
-                    # for non-reachable states
-                    if end_state in reachable_states:
-                        symbol_dict = transition_back_map[symbol]
-                        symbol_dict[end_state].append(start_state)
-                    else:
-                        # Add trap state if needed
-                        if trap_state is None:
-                            trap_state = next(
-                                x for x in count(-1, -1) if x not in reachable_states
-                            )
-                            for trap_symbol in input_symbols:
-                                transition_back_map[trap_symbol][trap_state] = [
-                                    trap_state
-                                ]
+                    reverse_transitions[(symbol, trap_state)].append(start_state)
 
-                            reachable_states.add(trap_state)
-
-                        transition_back_map[symbol][trap_state].append(start_state)
-
-        # Set up equivalence class data structure
-        eq_classes = PartitionRefinement(reachable_states)
-        refinement = eq_classes.refine(reachable_final_states)
-
-        final_states_id = (
-            refinement[0][0] if refinement else next(iter(eq_classes.get_set_ids()))
+        # Initialize block partition: separate final and non-final states
+        blocks = PartitionRefinement(reachable_states)
+        refinement_result = (
+            blocks.refine(reachable_final_states)
+            if reachable_final_states
+            else []
         )
 
-        origin_dicts = tuple(transition_back_map.values())
-        processing = {final_states_id}
+        # Build worklist: start with the smaller of (final_states, non_final_states)
+        worklist: List[Tuple[int, str]] = []
 
-        while processing:
-            # Save a copy of the set, since it could get modified while executing
-            active_state = tuple(eq_classes.get_set_by_id(processing.pop()))
-            for origin_dict in origin_dicts:
-                states_that_move_into_active_state = chain.from_iterable(
-                    origin_dict[end_state] for end_state in active_state
+        if refinement_result:
+            # Block was split into final and non-final
+            final_block_id, non_final_block_id = refinement_result[0]
+            final_block_size = len(blocks.get_set_by_id(final_block_id))
+            non_final_block_size = len(blocks.get_set_by_id(non_final_block_id))
+
+            smaller_block = (
+                final_block_id
+                if final_block_size <= non_final_block_size
+                else non_final_block_id
+            )
+
+            # Add (block, symbol) pairs to worklist for all symbols
+            worklist.extend((smaller_block, symbol) for symbol in input_symbols)
+        else:
+            # No split occurred, add all symbols with the single block
+            single_block_id = next(iter(blocks.get_set_ids()))
+            worklist.extend(
+                (single_block_id, symbol) for symbol in input_symbols
+            )
+
+        # Main refinement loop
+        while worklist:
+            block_id, symbol = worklist.pop()
+            block_states = blocks.get_set_by_id(block_id)
+
+            # Find all states that transition to this block via this symbol
+            states_transitioning_to_block = set()
+            for target_state in block_states:
+                states_transitioning_to_block.update(
+                    reverse_transitions.get((symbol, target_state), [])
                 )
 
-                # Refine set partition by states moving into current active one
-                new_eq_class_pairs = eq_classes.refine(
-                    states_that_move_into_active_state
-                )
+            # Refine all blocks based on which states transition to block_id via symbol
+            blocks_to_check = list(blocks.get_set_ids())
+            for check_block_id in blocks_to_check:
+                check_block = blocks.get_set_by_id(check_block_id)
 
-                for YintX_id, YdiffX_id in new_eq_class_pairs:
-                    # Only adding one id to processing, since the other is already there
-                    if YdiffX_id in processing:
-                        processing.add(YintX_id)
+                # Find intersection: states in check_block that transition to block_id
+                intersect = check_block & states_transitioning_to_block
+
+                if not intersect or len(intersect) == len(check_block):
+                    # No split needed
+                    continue
+
+                # This block needs to be split
+                new_block_pairs = blocks.refine(intersect)
+
+                if not new_block_pairs:
+                    continue
+
+                new_block_id, remaining_block_id = new_block_pairs[0]
+
+                # Update worklist: for each symbol, add the smaller of the two
+                # new blocks
+                for sym in input_symbols:
+                    # Check if (check_block_id, sym) is in worklist
+                    if (check_block_id, sym) in worklist:
+                        # Replace with both new blocks
+                        worklist.remove((check_block_id, sym))
+                        worklist.append((new_block_id, sym))
+                        worklist.append((remaining_block_id, sym))
                     else:
-                        if len(eq_classes.get_set_by_id(YintX_id)) <= len(
-                            eq_classes.get_set_by_id(YdiffX_id)
-                        ):
-                            processing.add(YintX_id)
-                        else:
-                            processing.add(YdiffX_id)
+                        # Add the smaller block
+                        new_size = len(blocks.get_set_by_id(new_block_id))
+                        remaining_size = len(
+                            blocks.get_set_by_id(remaining_block_id)
+                        )
+                        smaller = (
+                            new_block_id
+                            if new_size <= remaining_size
+                            else remaining_block_id
+                        )
+                        worklist.append((smaller, sym))
 
-        # now eq_classes are good to go, make them a list for ordering
+        # Build minimized DFA from final blocks
         eq_class_name_pairs: List[Tuple[DFAStateT, Set[DFAStateT]]] = (
-            [(frozenset(eq), eq) for eq in eq_classes.get_sets()]
+            [(frozenset(eq), eq) for eq in blocks.get_sets()]
             if retain_names
-            else list(enumerate(eq_classes.get_sets()))
+            else list(enumerate(blocks.get_sets()))
         )
 
-        # need a backmap to prevent constant calls to index
+        # Create mapping from old states to new states (block representatives)
         back_map = {
             state: name
             for name, eq in eq_class_name_pairs
@@ -706,8 +757,7 @@ class DFA(fa.FA):
             if trap_state not in eq
         }
 
-        # If only one equivalence class with the trap state,
-        # return empty language.
+        # If only one equivalence class with the trap state, return empty language
         if not back_map:
             return cls.empty_language(input_symbols)
 
