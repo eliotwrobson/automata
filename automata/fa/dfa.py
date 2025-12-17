@@ -628,9 +628,9 @@ class DFA(fa.FA):
 
         # Build reverse transition map: for each (symbol, target), list of sources
         # Use None as sentinel for implicit trap state (undefined transitions)
-        reverse_transitions: Dict[
-            Tuple[str, Optional[DFAStateT]], List[DFAStateT]
-        ] = defaultdict(list)
+        reverse_transitions: Dict[Tuple[str, Optional[DFAStateT]], List[DFAStateT]] = (
+            defaultdict(list)
+        )
 
         # Track if we have any undefined transitions (partial DFA)
         has_trap_state = False
@@ -648,7 +648,7 @@ class DFA(fa.FA):
                     # Undefined transition - goes to implicit trap state (None)
                     reverse_transitions[(symbol, None)].append(start_state)
                     has_trap_state = True
-        
+
         # Add self-loops for trap state (None loops to itself on all symbols)
         if has_trap_state:
             for symbol in input_symbols:
@@ -656,7 +656,9 @@ class DFA(fa.FA):
 
         # Initialize block partition: separate final and non-final states
         # Include trap state (None) if there are undefined transitions
-        states_with_trap = reachable_states | {None} if has_trap_state else reachable_states
+        states_with_trap = (
+            reachable_states | {None} if has_trap_state else reachable_states
+        )
         blocks = PartitionRefinement(states_with_trap)
         refinement_result = (
             blocks.refine(reachable_final_states) if reachable_final_states else []
